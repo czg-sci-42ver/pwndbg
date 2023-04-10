@@ -151,6 +151,7 @@ def nearpc(pc=None, lines=None, emulate=False, repeat=False) -> List[str]:
 
     # Print out each instruction
     for address_str, symbol, instr in zip(addresses, symbols, instructions):
+        # print("instr ",instr)
         asm = D.instruction(instr)
         prefix_sign = pwndbg.gdblib.config.nearpc_prefix
 
@@ -163,6 +164,7 @@ def nearpc(pc=None, lines=None, emulate=False, repeat=False) -> List[str]:
         pre = pwndbg.ida.Anterior(instr.address)
         if pre:
             result.append(c.ida_anterior(pre))
+        # print("append one ",c.ida_anterior(pre))
 
         # Colorize address and symbol if not highlighted
         # symbol is fetched from gdb and it can be e.g. '<main+8>'
@@ -193,19 +195,24 @@ def nearpc(pc=None, lines=None, emulate=False, repeat=False) -> List[str]:
             if should_highlight_opcodes:
                 opcodes = C.highlight(opcodes)
                 should_highlight_opcodes = False
-        line = " ".join(filter(None, (prefix, address_str, opcodes, symbol, asm)))
+        # line = " ".join(filter(None, (prefix, address_str, opcodes, symbol, asm)))
+        line = "".join(filter(None, (prefix, address_str, opcodes, symbol, asm)))
+        # print("add line ",asm)
 
         # If there was a branch before this instruction which was not
         # contiguous, put in some ellipses.
         if prev and prev.address + prev.size != instr.address:
             result.append(c.branch_marker("%s" % nearpc_branch_marker))
+            # print("append 2.1 ",nearpc_branch_marker_contiguous)
 
         # Otherwise if it's a branch and it *is* contiguous, just put
         # and empty line.
         elif prev and any(g in prev.groups for g in (CS_GRP_CALL, CS_GRP_JUMP, CS_GRP_RET)):
             if nearpc_branch_marker_contiguous:
                 result.append("%s" % nearpc_branch_marker_contiguous)
+            # print("append 2.2 ",nearpc_branch_marker_contiguous)
 
+        
         # For syscall instructions, put the name on the side
         if instr.address == pc:
             syscall_name = pwndbg.arguments.get_syscall_name(instr)

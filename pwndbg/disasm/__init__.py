@@ -143,11 +143,15 @@ class SimpleInstruction:
 @pwndbg.lib.memoize.reset_on_cont
 def get_one_instruction(address):
     if pwndbg.gdblib.arch.current not in CapstoneArch:
+        # print("get_one_instruction SimpleInstruction",SimpleInstruction(address))
         return SimpleInstruction(address)
     md = get_disassembler(address)
+    # print("md ",type(md))
     size = VariableInstructionSizeMax.get(pwndbg.gdblib.arch.current, 4)
     data = pwndbg.gdblib.memory.read(address, size, partial=True)
+    # print("data ",data)
     for ins in md.disasm(bytes(data), address, 1):
+        # print("get_one_instruction ",ins)
         pwndbg.disasm.arch.DisassemblyAssistant.enhance(ins)
         return ins
 
@@ -275,6 +279,7 @@ def near(address, instructions=1, emulate=False, show_prev_insns=True):
         insns.reverse()
 
     insns.append(current)
+    print("insns init ",insns)
 
     # Some architecture aren't emulated yet
     if not pwndbg.emu or pwndbg.gdblib.arch.current not in pwndbg.emu.emulator.arch_to_UC:
