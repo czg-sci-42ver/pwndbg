@@ -33,7 +33,9 @@ def _get_arch(ptrsize):
     else:
         endian = "big"
 
+    # print("thread ",gdb.selected_thread(),"alive ",pwndbg.gdblib.proc.alive)
     if pwndbg.gdblib.proc.alive:
+        # print("frame",gdb.newest_frame())
         arch = gdb.newest_frame().architecture().name()
     else:
         arch = gdb.execute("show architecture", to_string=True).strip()

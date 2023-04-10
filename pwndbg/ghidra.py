@@ -20,15 +20,18 @@ def decompile(func=None):
     """
     try:
         r2 = pwndbg.radare2.r2pipe()
+        print("use r2pipe")
     except ImportError:
         try:
             r2 = pwndbg.rizin.rzpipe()
+            print("use rzpipe")
         except ImportError:
             raise Exception("r2pipe or rzpipe not available, but required for r2/rz->ghidra bridge")
 
     # LD -> list supported decompilers (e cmd.pdc=?)
     # Outputs for example: pdc\npdg
-    if "pdg" not in r2.cmd("LD").split("\n"):
+
+    if "ghidra" not in r2.cmd("Laq").split("\n"):
         raise Exception(
             "radare2/rizin plugin r2ghidra/rzghidra must be installed and available from r2/rz"
         )
@@ -40,7 +43,7 @@ def decompile(func=None):
             else "main"
         )
 
-    src = r2.cmdj("pdgj @" + func)
+    src = r2.cmdj("pdgj @ " + func)
     if not src:
         raise Exception("Decompile command failed, check if '{}' is a valid target".format(func))
 
