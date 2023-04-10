@@ -97,7 +97,8 @@ class Parameter(gdb.Parameter):
         if not pwndbg.decorators.first_prompt:
             return ""
 
-        return "Set %s to %r." % (self.param.set_show_doc, self.native_value)
+        # return "Set %s to %r." % (self.param.set_show_doc, self.native_value)
+        return ""
 
     def __get_set_string_gdb_le_9(self) -> str:
         """Handles the GDB `set <param>` command for GDB < 9"""
@@ -113,6 +114,7 @@ class Parameter(gdb.Parameter):
         return self.__get_set_string_gdb_gte_9()
 
     get_set_string = __get_set_string_gdb_gte_9 if IS_GDB_GTE_9 else __get_set_string_gdb_le_9
+    # get_show_string = " "
 
     def __get_show_string_gdb_gte_9(self, svalue) -> str:
         """Handles the GDB `show <param>` command for GDB >= 9"""
