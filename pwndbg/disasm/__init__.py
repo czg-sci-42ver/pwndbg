@@ -279,7 +279,7 @@ def near(address, instructions=1, emulate=False, show_prev_insns=True):
         insns.reverse()
 
     insns.append(current)
-    print("insns init ",insns)
+    # print("insns init ",insns)
 
     # Some architecture aren't emulated yet
     if not pwndbg.emu or pwndbg.gdblib.arch.current not in pwndbg.emu.emulator.arch_to_UC:

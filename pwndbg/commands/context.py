@@ -616,7 +616,7 @@ def context_disasm(target=sys.stdout, with_banner=True, width=None):
     if cs is not None and cs.syntax != syntax:
         pwndbg.lib.memoize.reset()
 
-    print("current lines num",code_lines," to show ",code_lines // 2)
+    # print("current lines num",code_lines," to show ",code_lines // 2)
     result = pwndbg.gdblib.nearpc.nearpc(
         lines=code_lines // 2, emulate=bool(pwndbg.gdblib.config.emulate)
     )

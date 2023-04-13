@@ -99,6 +99,7 @@ class module(ModuleType):
 
     def __iter__(self):
         regs = set(reg_sets[pwndbg.gdblib.arch.current]) | {"pc", "sp"}
+        print("regs ",regs," reg_sets ",set(reg_sets[pwndbg.gdblib.arch.current]))
         for item in regs:
             yield item
 
