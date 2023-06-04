@@ -26,7 +26,7 @@ import pwndbg.gdblib.regs
 import pwndbg.gdblib.remote
 import pwndbg.gdblib.stack
 import pwndbg.gdblib.typeinfo
-import pwndbg.lib.memoize
+import pwndbg.lib.cache
 
 # List of manually-explored pages which were discovered
 # by analyzing the stack or register context.
@@ -60,8 +60,7 @@ Note that the page-tables method will require the QEMU kernel process to be on t
 )
 
 
-@pwndbg.lib.memoize.reset_on_objfile
-@pwndbg.lib.memoize.reset_on_start
+@pwndbg.lib.cache.cache_until("objfile", "start")
 def is_corefile() -> bool:
     """
     For example output use:
@@ -77,8 +76,7 @@ def is_corefile() -> bool:
     return "Local core dump file:\n" in pwndbg.gdblib.info.target()
 
 
-@pwndbg.lib.memoize.reset_on_start
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("start", "stop")
 def get() -> Tuple[pwndbg.lib.memory.Page, ...]:
     """
     Returns a tuple of `Page` objects representing the memory mappings of the
@@ -107,7 +105,6 @@ def get() -> Tuple[pwndbg.lib.memory.Page, ...]:
         "aarch64",
         "riscv:rv64",
     ):
-
         # If kernel_vmmap_via_pt is not set to the default value of "deprecated",
         # That means the user was explicitly setting it themselves and need to
         # be warned that the option is deprecated
@@ -147,7 +144,7 @@ def get() -> Tuple[pwndbg.lib.memory.Page, ...]:
     return tuple(pages)
 
 
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def find(address):
     if address is None:
         return None
@@ -217,7 +214,7 @@ def add_custom_page(page) -> None:
     # Reset all the cache
     # We can not reset get() only, since the result may be used by others.
     # TODO: avoid flush all caches
-    pwndbg.lib.memoize.reset()
+    pwndbg.lib.cache.clear_caches()
 
 
 def clear_custom_page() -> None:
@@ -227,11 +224,10 @@ def clear_custom_page() -> None:
     # Reset all the cache
     # We can not reset get() only, since the result may be used by others.
     # TODO: avoid flush all caches
-    pwndbg.lib.memoize.reset()
+    pwndbg.lib.cache.clear_caches()
 
 
-@pwndbg.lib.memoize.reset_on_objfile
-@pwndbg.lib.memoize.reset_on_start
+@pwndbg.lib.cache.cache_until("objfile", "start")
 def coredump_maps():
     """
     Parses `info proc mappings` and `maintenance info sections`
@@ -337,8 +333,7 @@ def coredump_maps():
     return tuple(pages)
 
 
-@pwndbg.lib.memoize.reset_on_start
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("start", "stop")
 def proc_pid_maps():
     """
     Parse the contents of /proc/$PID/maps on the server.
@@ -376,9 +371,9 @@ def proc_pid_maps():
 
     pid = pwndbg.gdblib.proc.pid
     locations = [
-        "/proc/%s/maps" % pid,
-        "/proc/%s/map" % pid,
-        "/usr/compat/linux/proc/%s/maps" % pid,
+        f"/proc/{pid}/maps",
+        f"/proc/{pid}/map",
+        f"/usr/compat/linux/proc/{pid}/maps",
     ]
 
     for location in locations:
@@ -425,7 +420,7 @@ def proc_pid_maps():
     return tuple(pages)
 
 
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def kernel_vmmap_via_page_tables():
     import pt
 
@@ -549,7 +544,7 @@ def kernel_vmmap_via_monitor_info_mem():
     return tuple(pages)
 
 
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def info_sharedlibrary():
     """
     Parses the output of `info sharedlibrary`.
@@ -595,7 +590,7 @@ def info_sharedlibrary():
     return tuple(sorted(pages))
 
 
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def info_files():
     # Example of `info files` output:
     # Symbols from "/bin/bash".
@@ -653,8 +648,8 @@ def info_files():
     return tuple(pages)
 
 
-@pwndbg.lib.memoize.reset_on_exit
-def info_auxv(skip_exe=False):
+@pwndbg.lib.cache.cache_until("exit")
+def info_auxv(skip_exe: bool = False):
     """
     Extracts the name of the executable from the output of the command
     "info auxv". Note that if the executable path is a symlink,
@@ -679,7 +674,13 @@ def info_auxv(skip_exe=False):
     phdr = auxv.AT_PHDR
 
     if not skip_exe and (entry or phdr):
-        pages.extend(pwndbg.gdblib.elf.map(entry or phdr, exe_name))
+        for addr in [entry, phdr]:
+            if not addr:
+                continue
+            new_pages = pwndbg.gdblib.elf.map(addr, exe_name)
+            if new_pages:
+                pages.extend(new_pages)
+                break
 
     if base:
         pages.extend(pwndbg.gdblib.elf.map(base, "[linker]"))
@@ -690,7 +691,7 @@ def info_auxv(skip_exe=False):
     return tuple(sorted(pages))
 
 
-def find_boundaries(addr, name="", min=0):
+def find_boundaries(addr, name: str = "", min: int = 0):
     """
     Given a single address, find all contiguous pages
     which are mapped.

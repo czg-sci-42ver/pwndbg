@@ -84,7 +84,7 @@ config_context_sections = pwndbg.gdblib.config.add_param(
 )
 
 # Storing output configuration per section
-outputs = {}  # type: Dict[str,str]
+outputs: Dict[str, str] = {}
 output_settings = {}
 
 
@@ -106,7 +106,7 @@ def validate_context_sections() -> None:
         config_context_sections.value = ""
         print(
             message.warn(
-                "Sections set to be empty. FYI valid values are: %s" % ", ".join(valid_values)
+                f"Sections set to be empty. FYI valid values are: {', '.join(valid_values)}"
             )
         )
         return
@@ -114,9 +114,7 @@ def validate_context_sections() -> None:
     for section in config_context_sections.split():
         if section not in valid_values:
             print(
-                message.warn(
-                    "Invalid section: %s, valid values: %s" % (section, ", ".join(valid_values))
-                )
+                message.warn(f"Invalid section: {section}, valid values: {', '.join(valid_values)}")
             )
             print(message.warn("(setting none of them like '' will make sections not appear)"))
             config_context_sections.revert_default()
@@ -582,7 +580,7 @@ def get_regs(*regs):
         else:
             desc = pwndbg.chain.format(value)
 
-        result.append("%s%s %s" % (m, regname, desc))
+        result.append(f"{m}{regname} {desc}")
     return result
 
 
@@ -614,7 +612,7 @@ def context_disasm(target=sys.stdout, with_banner=True, width=None):
 
     # The `None` case happens when the cache was not filled yet (see e.g. #881)
     if cs is not None and cs.syntax != syntax:
-        pwndbg.lib.memoize.reset()
+        pwndbg.lib.cache.clear_caches()
 
     # print("current lines num",code_lines," to show ",code_lines // 2)
     result = pwndbg.gdblib.nearpc.nearpc(
@@ -648,7 +646,7 @@ pwndbg.gdblib.config.add_param(
 theme.add_param("code-prefix", "►", "prefix marker for 'context code' command")
 
 
-@pwndbg.lib.memoize.reset_on_start
+@pwndbg.lib.cache.cache_until("start")
 def get_highlight_source(filename):
     # Notice that the code is cached
     with open(filename, encoding="utf-8", errors="ignore") as f:
@@ -768,7 +766,7 @@ backtrace_lines = pwndbg.gdblib.config.add_param(
     "context-backtrace-lines", 8, "number of lines to print in the backtrace context"
 )
 backtrace_frame_label = theme.add_param(
-    "backtrace-frame-label", "f ", "frame number label for backtrace"
+    "backtrace-frame-label", "", "frame number label for backtrace"
 )
 
 
@@ -803,9 +801,8 @@ def context_backtrace(with_banner=True, target=sys.stdout, width=None):
     i = 0
     bt_prefix = "%s" % pwndbg.gdblib.config.backtrace_prefix
     while True:
-
         prefix = bt_prefix if frame == this_frame else " " * len(bt_prefix)
-        prefix = " %s" % c.prefix(prefix)
+        prefix = f" {c.prefix(prefix)}"
         addrsz = c.address(pwndbg.ui.addrsz(frame.pc()))
         symbol = c.symbol(pwndbg.gdblib.symbol.get(int(frame.pc())))
         if symbol:
@@ -848,10 +845,9 @@ def save_signal(signal) -> None:
             result.append(message.exit("Exited: %r" % signal.exit_code))
 
     elif isinstance(signal, gdb.SignalEvent):
-        msg = "Program received signal %s" % signal.stop_signal
+        msg = f"Program received signal {signal.stop_signal}"
 
         if signal.stop_signal == "SIGSEGV":
-
             # When users use rr (https://rr-project.org or https://github.com/mozilla/rr)
             # we can't access $_siginfo, so lets just show current pc
             # see also issue 476
@@ -867,7 +863,7 @@ def save_signal(signal) -> None:
 
     elif isinstance(signal, gdb.BreakpointEvent):
         for bkpt in signal.breakpoints:
-            result.append(message.breakpoint("Breakpoint %s" % (bkpt.location)))
+            result.append(message.breakpoint(f"Breakpoint {(bkpt.location)}"))
 
 
 gdb.events.cont.connect(save_signal)
@@ -891,7 +887,7 @@ context_sections = {
 }
 
 
-@pwndbg.lib.memoize.forever
+@pwndbg.lib.cache.cache_until("forever")
 def _is_rr_present() -> bool:
     """
     Checks whether rr project is present (so someone launched e.g. `rr replay <some-recording>`)

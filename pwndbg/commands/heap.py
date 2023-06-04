@@ -1,5 +1,8 @@
 import argparse
 import ctypes
+from string import printable
+from typing import Dict
+from typing import List
 
 import gdb
 from tabulate import tabulate
@@ -112,7 +115,7 @@ def format_bin(bins: Bins, verbose=False, offset=None):
     return result
 
 
-def print_no_arena_found_error(tid=None):
+def print_no_arena_found_error(tid=None) -> None:
     if tid is None:
         tid = pwndbg.gdblib.proc.thread_id
     print(
@@ -122,7 +125,7 @@ def print_no_arena_found_error(tid=None):
     )
 
 
-def print_no_tcache_bins_found_error(tid=None):
+def print_no_tcache_bins_found_error(tid=None) -> None:
     if tid is None:
         tid = pwndbg.gdblib.proc.thread_id
     print(
@@ -154,9 +157,9 @@ parser.add_argument(
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def heap(addr=None, verbose=False, simple=False) -> None:
     """Iteratively print chunks on a heap, default to the current thread's
     active heap.
@@ -190,9 +193,9 @@ parser.add_argument("addr", nargs="?", type=int, default=None, help="Address of 
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def arena(addr=None) -> None:
     """Print the contents of an arena, default to the current thread's arena."""
     allocator = pwndbg.heap.current
@@ -219,9 +222,9 @@ parser = argparse.ArgumentParser(description="List this process's arenas.")
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def arenas() -> None:
     """Lists this process's arenas."""
     allocator = pwndbg.heap.current
@@ -284,10 +287,9 @@ parser.add_argument("addr", nargs="?", type=int, default=None, help="Address of 
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
-@pwndbg.commands.OnlyWhenHeapIsInitialized
 @pwndbg.commands.OnlyWithTcache
+@pwndbg.commands.OnlyWhenUserspace
 def tcache(addr=None) -> None:
     """Print a thread's tcache contents, default to the current thread's
     tcache.
@@ -312,9 +314,9 @@ parser = argparse.ArgumentParser(description="Print the mp_ struct's contents.")
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def mp() -> None:
     """Print the mp_ struct's contents."""
     allocator = pwndbg.heap.current
@@ -332,9 +334,9 @@ parser.add_argument("addr", nargs="?", type=int, default=None, help="Address of 
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def top_chunk(addr=None) -> None:
     """Print relevant information about an arena's top chunk, default to the
     current thread's arena.
@@ -367,9 +369,9 @@ parser.add_argument(
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def malloc_chunk(addr, fake=False, verbose=False, simple=False) -> None:
     """Print a malloc_chunk struct's contents."""
     allocator = pwndbg.heap.current
@@ -378,7 +380,7 @@ def malloc_chunk(addr, fake=False, verbose=False, simple=False) -> None:
 
     headers_to_print = []  # both state (free/allocated) and flags
     fields_to_print = set()  # in addition to addr and size
-    out_fields = "Addr: {}\n".format(M.get(chunk.address))
+    out_fields = f"Addr: {M.get(chunk.address)}\n"
 
     if fake:
         headers_to_print.append(message.on("Fake chunk"))
@@ -411,7 +413,7 @@ def malloc_chunk(addr, fake=False, verbose=False, simple=False) -> None:
             for bins in bins_list:
                 if bins.contains_chunk(chunk.real_size, chunk.address):
                     no_match = False
-                    headers_to_print.append(message.on("Free chunk ({})".format(bins.bin_type)))
+                    headers_to_print.append(message.on(f"Free chunk ({bins.bin_type})"))
                     if not verbose:
                         fields_to_print.update(bins.bin_type.valid_fields())
             if no_match:
@@ -420,7 +422,7 @@ def malloc_chunk(addr, fake=False, verbose=False, simple=False) -> None:
     if verbose:
         fields_to_print.update(["prev_size", "size", "fd", "bk", "fd_nextsize", "bk_nextsize"])
     else:
-        out_fields += "Size: 0x{:02x}\n".format(chunk.size)
+        out_fields += f"Size: 0x{chunk.size:02x}\n"
 
     prev_inuse, is_mmapped, non_main_arena = allocator.chunk_flags(chunk.size)
     if prev_inuse:
@@ -433,8 +435,8 @@ def malloc_chunk(addr, fake=False, verbose=False, simple=False) -> None:
     fields_ordered = ["prev_size", "size", "fd", "bk", "fd_nextsize", "bk_nextsize"]
     for field_to_print in fields_ordered:
         if field_to_print in fields_to_print:
-            out_fields += message.system(field_to_print) + ": 0x{:02x}\n".format(
-                getattr(chunk, field_to_print)
+            out_fields += (
+                message.system(field_to_print) + f": 0x{getattr(chunk, field_to_print):02x}\n"
             )
 
     print(" | ".join(headers_to_print) + "\n" + out_fields)
@@ -451,9 +453,9 @@ parser.add_argument("tcache_addr", nargs="?", type=int, default=None, help="Addr
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def bins(addr=None, tcache_addr=None) -> None:
     """Print the contents of all an arena's bins and a thread's tcache,
     default to the current thread's arena and tcache.
@@ -485,9 +487,9 @@ parser.add_argument(
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def fastbins(addr=None, verbose=False) -> None:
     """Print the contents of an arena's fastbins, default to the current
     thread's arena.
@@ -519,9 +521,9 @@ parser.add_argument(
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def unsortedbin(addr=None, verbose=False) -> None:
     """Print the contents of an arena's unsortedbin, default to the current
     thread's arena.
@@ -553,9 +555,9 @@ parser.add_argument(
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def smallbins(addr=None, verbose=False) -> None:
     """Print the contents of an arena's smallbins, default to the current
     thread's arena.
@@ -587,9 +589,9 @@ parser.add_argument(
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def largebins(addr=None, verbose=False) -> None:
     """Print the contents of an arena's largebins, default to the current
     thread's arena.
@@ -621,10 +623,9 @@ parser.add_argument(
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
-@pwndbg.commands.OnlyWhenHeapIsInitialized
 @pwndbg.commands.OnlyWithTcache
+@pwndbg.commands.OnlyWhenUserspace
 def tcachebins(addr=None, verbose=False) -> None:
     """Print the contents of a tcache, default to the current thread's tcache."""
     allocator = pwndbg.heap.current
@@ -644,9 +645,13 @@ def tcachebins(addr=None, verbose=False) -> None:
 parser = argparse.ArgumentParser(
     description="Find candidate fake fast or tcache chunks overlapping the specified address."
 )
-parser.add_argument("addr", type=int, help="Address of the word-sized value to overlap.")
+parser.add_argument("target_address", type=int, help="Address of the word-sized value to overlap.")
 parser.add_argument(
-    "size", nargs="?", type=int, default=None, help="Maximum size of fake chunks to find."
+    "max_candidate_size",
+    nargs="?",
+    type=int,
+    default=None,
+    help="Maximum size of fake chunks to find.",
 )
 parser.add_argument(
     "--align",
@@ -656,82 +661,114 @@ parser.add_argument(
     help="Whether the fake chunk must be aligned to MALLOC_ALIGNMENT. This is required for tcache "
     + "chunks and for all chunks when Safe Linking is enabled",
 )
+parser.add_argument(
+    "--glibc-fastbin-bug",
+    "-b",
+    action="store_true",
+    default=False,
+    help="Does the GLIBC fastbin size field bug affect the candidate size field width?",
+)
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
-def find_fake_fast(addr, size=None, align=False) -> None:
+@pwndbg.commands.OnlyWhenUserspace
+def find_fake_fast(
+    target_address, max_candidate_size=None, align=False, glibc_fastbin_bug=False
+) -> None:
     """Find candidate fake fast chunks overlapping the specified address."""
-    psize = pwndbg.gdblib.arch.ptrsize
     allocator = pwndbg.heap.current
-    malloc_alignment = allocator.malloc_alignment
 
-    min_fast = allocator.min_chunk_size
-    max_fast = allocator.global_max_fast
-    max_fastbin = allocator.fastbin_index(max_fast)
+    size_sz = allocator.size_sz
+    min_chunk_size = allocator.min_chunk_size
+    global_max_fast = allocator.global_max_fast
+    size_field_width = gdb.lookup_type("unsigned int").sizeof if glibc_fastbin_bug else size_sz
 
-    if size is None:
-        size = max_fast
-    elif size > addr:
-        print(message.warn("Size of 0x%x is greater than the target address 0x%x" % (size, addr)))
-        size = addr
-    elif size > max_fast:
+    if max_candidate_size is None:
+        max_candidate_size = global_max_fast
+    else:
+        max_candidate_size = int(max_candidate_size)
+        if max_candidate_size > global_max_fast:
+            print(
+                message.warn(
+                    f"Maximum candidate size {max_candidate_size:#04x} is greater than the global_max_fast value of {global_max_fast:#04x}"
+                )
+            )
+
+    target_address = int(target_address)
+    if max_candidate_size > target_address:
         print(
             message.warn(
-                "0x%x is greater than the global_max_fast value of 0x%x" % (size, max_fast)
+                f"Maximum candidate size {max_candidate_size:#04x} is greater than the target address {target_address:#x}"
             )
         )
-    elif size < min_fast:
+        print(message.warn(f"Using maximum candidate size of {target_address:#x}"))
+        max_candidate_size = target_address
+    elif max_candidate_size < min_chunk_size:
         print(
             message.warn(
-                "0x%x is smaller than the minimum fastbin chunk size of 0x%x" % (size, min_fast)
+                f"Maximum candidate size {max_candidate_size:#04x} is smaller than the minimum chunk size of {min_chunk_size:#04x}"
             )
         )
-        size = min_fast
+        print(message.warn(f"Using maximum candidate size of {min_chunk_size:#04x}"))
+        max_candidate_size = min_chunk_size
 
-    # Clear the flags
-    size &= ~0xF
+    max_candidate_size &= ~(allocator.malloc_align_mask)
 
-    start = int(addr) - size + psize
+    search_start = target_address - max_candidate_size + size_sz
+    search_end = target_address
+
+    if pwndbg.gdblib.memory.peek(search_start) is None:
+        search_start = pwndbg.lib.memory.page_size_align(search_start)
+        if (
+            search_start > (search_end - size_field_width)
+            or pwndbg.gdblib.memory.peek(search_start) is None
+        ):
+            print(
+                message.warn(
+                    "No fake fast chunk candidates found; memory preceding target address is not readable"
+                )
+            )
+            return None
 
     if align:
-        # If a chunk is aligned to MALLOC_ALIGNMENT, the size field should be at
-        # offset `psize`. First we align up to a multiple of `psize`
-        new_start = pwndbg.lib.memory.align_up(start, psize)
+        search_start = pwndbg.lib.memory.align_up(search_start, size_sz)
+        search_start |= size_sz
 
-        # Then we make sure we're at a multiple of `psize` but not `psize*2` by
-        # making sure the bottom nibble gets set to `psize`
-        new_start |= psize
-
-        # We should not have increased `start` by more than `psize*2 - 1` bytes
-        distance = new_start - start
-        assert distance < psize * 2
-
-        # If we're starting at a higher address, we still only want to read
-        # enough bytes to reach our target address
-        size -= distance
-
-        # Clear the flags
-        size &= ~0xF
-
-        start = new_start
+        if search_start > (search_end - size_field_width):
+            print(
+                message.warn(
+                    "No fake fast chunk candidates found; alignment didn't leave enough space for a size field"
+                )
+            )
+            return None
 
     print(
         message.notice(
-            "Searching for fastbin sizes up to 0x%x starting at 0x%x resulting in an overlap of 0x%x"
-            % (size, start, addr)
+            f"Searching for fastbin size fields up to {max_candidate_size:#04x}, starting at {search_start:#x} resulting in an overlap of {target_address:#x}"
         )
     )
 
-    # Only consider `size - psize` bytes, since we're starting from after `prev_size`
-    mem = pwndbg.gdblib.memory.read(start, size - psize, partial=True)
+    search_region = pwndbg.gdblib.memory.read(search_start, search_end - search_start, partial=True)
 
     print(C.banner("FAKE CHUNKS"))
-    step = malloc_alignment if align else 1
-    for offset in pwndbg.lib.heap.helpers.find_fastbin_size(mem, size, step):
-        malloc_chunk(start + offset, fake=True)
+    step = allocator.malloc_alignment if align else 1
+    for i in range(0, len(search_region), step):
+        candidate = search_region[i : i + size_field_width]
+
+        if len(candidate) == size_field_width:
+            size_field = pwndbg.gdblib.arch.unpack(candidate)
+            size_field &= ~(allocator.malloc_align_mask)
+
+            if size_field < min_chunk_size or size_field > max_candidate_size:
+                continue
+
+            candidate_address = search_start + i
+            if (candidate_address + size_field) >= (target_address + size_sz):
+                malloc_chunk(candidate_address - size_sz, fake=True)
+        else:
+            break
 
 
 pwndbg.gdblib.config.add_param(
@@ -785,9 +822,9 @@ group.add_argument(
 
 
 @pwndbg.commands.ArgparsedCommand(parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWithResolvedHeapSyms
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def vis_heap_chunks(
     addr=None, count=None, beyond_top=None, no_truncate=None, all_chunks=None
 ) -> None:
@@ -878,6 +915,8 @@ def vis_heap_chunks(
         >> 1
     )
 
+    bin_labels_map: Dict[int, List[str]] = bin_labels_mapping(bin_collections)
+
     for c, stop in enumerate(chunk_delims):
         color_func = color_funcs[c % len(color_funcs)]
 
@@ -904,17 +943,18 @@ def vis_heap_chunks(
             if printed % 2 == 0:
                 out += "\n0x%x" % cursor
 
-            cell = pwndbg.gdblib.arch.unpack(pwndbg.gdblib.memory.read(cursor, ptr_size))
-            cell_hex = "\t0x{:0{n}x}".format(cell, n=ptr_size * 2)
+            data = pwndbg.gdblib.memory.read(cursor, ptr_size)
+            cell = pwndbg.gdblib.arch.unpack(data)
+            cell_hex = f"\t0x{cell:0{ptr_size * 2}x}"
 
             out += color_func(cell_hex)
             printed += 1
 
-            labels.extend(bin_labels(cursor, bin_collections))
+            labels.extend(bin_labels_map.get(cursor, []))
             if cursor == arena.top:
                 labels.append("Top chunk")
 
-            asc += bin_ascii(pwndbg.gdblib.memory.read(cursor, ptr_size))
+            asc += bin_ascii(data)
             if printed % 2 == 0:
                 out += "\t" + color_func(asc) + ("\t <-- " + ", ".join(labels) if labels else "")
                 asc = ""
@@ -932,15 +972,21 @@ def vis_heap_chunks(
         )
 
 
+VALID_CHARS = list(map(ord, set(printable) - set("\t\r\n\x0c\x0b")))
+
+
 def bin_ascii(bs):
-    from string import printable
-
-    valid_chars = list(map(ord, set(printable) - set("\t\r\n\x0c\x0b")))
-    return "".join(chr(c) if c in valid_chars else "." for c in bs)
+    return "".join(chr(c) if c in VALID_CHARS else "." for c in bs)
 
 
-def bin_labels(addr, collections):
-    labels = []
+def bin_labels_mapping(collections):
+    """
+    Returns all potential bin labels for all potential addresses
+    We precompute all of them because doing this on demand was too slow and inefficient
+    See #1675 for more details
+    """
+    labels_mapping: Dict[int, List[str]] = {}
+
     for bins in collections:
         if not bins:
             continue
@@ -950,17 +996,14 @@ def bin_labels(addr, collections):
             b = bins.bins[size]
             if isinstance(size, int):
                 size = hex(size)
-            count = "/{:d}".format(b.count) if bins_type == BinType.TCACHE else None
+            count = f"/{b.count:d}" if bins_type == BinType.TCACHE else None
             chunks = b.fd_chain
             for chunk_addr in chunks:
-                if addr == chunk_addr:
-                    labels.append(
-                        "{:s}[{:s}][{:d}{}]".format(
-                            bins_type, size, chunks.index(addr), count or ""
-                        )
-                    )
+                labels_mapping.setdefault(chunk_addr, []).append(
+                    f"{bins_type:s}[{size:s}][{chunks.index(chunk_addr):d}{count or ''}]"
+                )
 
-    return labels
+    return labels_mapping
 
 
 try_free_parser = argparse.ArgumentParser(
@@ -970,8 +1013,8 @@ try_free_parser.add_argument("addr", nargs="?", help="Address passed to free")
 
 
 @pwndbg.commands.ArgparsedCommand(try_free_parser, category=CommandCategory.HEAP)
-@pwndbg.commands.OnlyWhenRunning
 @pwndbg.commands.OnlyWhenHeapIsInitialized
+@pwndbg.commands.OnlyWhenUserspace
 def try_free(addr) -> None:
     addr = int(addr)
 
@@ -1030,7 +1073,7 @@ def try_free(addr) -> None:
     try:
         chunk = read_chunk(addr)
     except gdb.MemoryError as e:
-        print(message.error("Can't read chunk at address 0x{:x}, memory error".format(addr)))
+        print(message.error(f"Can't read chunk at address 0x{addr:x}, memory error"))
         return
 
     chunk_size = unsigned_size(chunk["size"])
@@ -1063,7 +1106,7 @@ def try_free(addr) -> None:
         err = "free(): invalid pointer -> misaligned chunk\n"
         err += "    LSB of 0x{:x} are 0b{}, should be 0b{}"
         if addr_tmp != addr:
-            err += " (0x{:x} was added to the address)".format(2 * size_sz)
+            err += f" (0x{2 * size_sz:x} was added to the address)"
         err = err.format(addr_tmp, bin(addr_tmp)[-aligned_lsb:], "0" * aligned_lsb)
         print(message.error(err))
         errors_found += 1
@@ -1128,9 +1171,7 @@ def try_free(addr) -> None:
         except gdb.MemoryError as e:
             print(
                 message.error(
-                    "Can't read next chunk at address 0x{:x}, memory error".format(
-                        chunk + chunk_size_unmasked
-                    )
+                    f"Can't read next chunk at address 0x{chunk + chunk_size_unmasked:x}, memory error"
                 )
             )
             finalize(errors_found, returned_before_error)
@@ -1161,9 +1202,7 @@ def try_free(addr) -> None:
             except gdb.MemoryError as e:
                 print(
                     message.error(
-                        "Can't read top fastbin chunk at address 0x{:x}, memory error".format(
-                            fastbin_top_chunk
-                        )
+                        f"Can't read top fastbin chunk at address 0x{fastbin_top_chunk:x}, memory error"
                     )
                 )
                 finalize(errors_found, returned_before_error)
@@ -1217,7 +1256,7 @@ def try_free(addr) -> None:
             next_chunk = read_chunk(next_chunk_addr)
             next_chunk_size = chunksize(unsigned_size(next_chunk["size"]))
         except (OverflowError, gdb.MemoryError) as e:
-            print(message.error("Can't read next chunk at address 0x{:x}".format(next_chunk_addr)))
+            print(message.error(f"Can't read next chunk at address 0x{next_chunk_addr:x}"))
             finalize(errors_found, returned_before_error)
             return
 
@@ -1247,9 +1286,7 @@ def try_free(addr) -> None:
                 prev_chunk = read_chunk(prev_chunk_addr)
                 prev_chunk_size = chunksize(unsigned_size(prev_chunk["size"]))
             except (OverflowError, gdb.MemoryError) as e:
-                print(
-                    message.error("Can't read next chunk at address 0x{:x}".format(prev_chunk_addr))
-                )
+                print(message.error(f"Can't read next chunk at address 0x{prev_chunk_addr:x}"))
                 finalize(errors_found, returned_before_error)
                 return
 
@@ -1272,11 +1309,7 @@ def try_free(addr) -> None:
                 next_next_chunk_addr = next_chunk_addr + next_chunk_size
                 next_next_chunk = read_chunk(next_next_chunk_addr)
             except (OverflowError, gdb.MemoryError) as e:
-                print(
-                    message.error(
-                        "Can't read next chunk at address 0x{:x}".format(next_next_chunk_addr)
-                    )
-                )
+                print(message.error(f"Can't read next chunk at address 0x{next_next_chunk_addr:x}"))
                 finalize(errors_found, returned_before_error)
                 return
 
@@ -1307,16 +1340,12 @@ def try_free(addr) -> None:
                 except (OverflowError, gdb.MemoryError) as e:
                     print(
                         message.error(
-                            "Can't read chunk at 0x{:x}, it is unsorted bin fd".format(
-                                unsorted["fd"]
-                            )
+                            f"Can't read chunk at 0x{unsorted['fd']:x}, it is unsorted bin fd"
                         )
                     )
                     errors_found += 1
             except (OverflowError, gdb.MemoryError) as e:
-                print(
-                    message.error("Can't read unsorted bin chunk at 0x{:x}".format(unsorted_addr))
-                )
+                print(message.error(f"Can't read unsorted bin chunk at 0x{unsorted_addr:x}"))
                 errors_found += 1
 
         else:

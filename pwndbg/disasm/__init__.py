@@ -17,7 +17,7 @@ import pwndbg.gdblib.arch
 import pwndbg.gdblib.memory
 import pwndbg.gdblib.symbol
 import pwndbg.ida
-import pwndbg.lib.memoize
+import pwndbg.lib.cache
 from pwndbg.color import message
 
 try:
@@ -61,8 +61,8 @@ VariableInstructionSizeMax = {
 backward_cache: DefaultDict = collections.defaultdict(lambda: None)
 
 
-@pwndbg.lib.memoize.reset_on_objfile
-def get_disassembler_cached(arch, ptrsize, endian, extra=None):
+@pwndbg.lib.cache.cache_until("objfile")
+def get_disassembler_cached(arch, ptrsize: int, endian, extra=None):
     arch = CapstoneArch[arch]
 
     if extra is None:
@@ -140,7 +140,7 @@ class SimpleInstruction:
         self.condition = False
 
 
-@pwndbg.lib.memoize.reset_on_cont
+@pwndbg.lib.cache.cache_until("cont")
 def get_one_instruction(address):
     if pwndbg.gdblib.arch.current not in CapstoneArch:
         # print("get_one_instruction SimpleInstruction",SimpleInstruction(address))
@@ -213,7 +213,7 @@ DO_NOT_EMULATE = {
 }
 
 
-def can_run_first_emulate():
+def can_run_first_emulate() -> bool:
     """
     Disable the emulate config variable if we don't have enough memory to use it
     See https://github.com/pwndbg/pwndbg/issues/1534

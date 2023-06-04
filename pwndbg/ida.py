@@ -24,7 +24,7 @@ import pwndbg.gdblib.elf
 import pwndbg.gdblib.events
 import pwndbg.gdblib.memory
 import pwndbg.gdblib.regs
-import pwndbg.lib.memoize
+import pwndbg.lib.cache
 from pwndbg.color import message
 
 ida_rpc_host = pwndbg.gdblib.config.add_param(
@@ -63,7 +63,7 @@ def init_ida_rpc_client() -> None:
     if _ida is None and (now - _ida_last_connection_check) < int(ida_timeout) + 5:
         return
 
-    addr = "http://{host}:{port}".format(host=ida_rpc_host, port=ida_rpc_port)
+    addr = f"http://{ida_rpc_host}:{ida_rpc_port}"
 
     _ida = xmlrpc.client.ServerProxy(addr)
     socket.setdefaulttimeout(int(ida_timeout))
@@ -71,7 +71,7 @@ def init_ida_rpc_client() -> None:
     exception = None  # (type, value, traceback)
     try:
         _ida.here()
-        print(message.success("Pwndbg successfully connected to Ida Pro xmlrpc: %s" % addr))
+        print(message.success(f"Pwndbg successfully connected to Ida Pro xmlrpc: {addr}"))
     except TimeoutError:
         exception = sys.exc_info()
         _ida = None
@@ -98,9 +98,7 @@ def init_ida_rpc_client() -> None:
                 exc_type, exc_value, _ = exception
                 print(
                     message.error(
-                        "Failed to connect to IDA Pro ({}: {})".format(
-                            exc_type.__qualname__, exc_value
-                        )
+                        f"Failed to connect to IDA Pro ({exc_type.__qualname__}: {exc_value})"
                     )
                 )
                 if exc_type is socket.timeout:
@@ -164,7 +162,7 @@ def returns_address(function):
     return wrapper
 
 
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def available() -> bool:
     if not ida_enabled:
         return False
@@ -199,7 +197,7 @@ def remote(function) -> None:
     global variables."""
 
 
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def base():
     segaddr: int = _ida.get_next_seg(0)
     base: int = _ida.get_fileregion_offset(segaddr)
@@ -215,14 +213,14 @@ def Comment(addr):
 
 @withIDA
 @takes_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def Name(addr):
     return _ida.get_name(addr, 0x1)  # GN_VISIBLE
 
 
 @withIDA
 @takes_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def GetFuncOffset(addr):
     rv = _ida.get_func_off_str(addr)
     return rv
@@ -230,7 +228,7 @@ def GetFuncOffset(addr):
 
 @withIDA
 @takes_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def GetType(addr):
     rv = _ida.get_type(addr)
     return rv
@@ -251,7 +249,7 @@ def Jump(addr):
 
 @withIDA
 @takes_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def Anterior(addr):
     hexrays_prefix = b"\x01\x04; "
     lines = []
@@ -336,7 +334,7 @@ def Auto_UnColor_PC() -> None:
 
 @withIDA
 @returns_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def LocByName(name):
     return _ida.get_name_ea_simple(str(name))
 
@@ -344,7 +342,7 @@ def LocByName(name):
 @withIDA
 @takes_address
 @returns_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def PrevHead(addr):
     return _ida.prev_head(addr)
 
@@ -352,34 +350,34 @@ def PrevHead(addr):
 @withIDA
 @takes_address
 @returns_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def NextHead(addr):
     return _ida.next_head(addr)
 
 
 @withIDA
 @takes_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def GetFunctionName(addr):
     return _ida.get_func_name(addr)
 
 
 @withIDA
 @takes_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def GetFlags(addr):
     return _ida.get_full_flags(addr)
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def isASCII(flags):
     return _ida.is_strlit(flags)
 
 
 @withIDA
 @takes_address
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def ArgCount(address) -> None:
     pass
 
@@ -395,87 +393,87 @@ def GetIdbPath():
 
 
 @takes_address
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def has_cached_cfunc(addr):
     return _ida.has_cached_cfunc(addr)
 
 
 @withHexrays
 @takes_address
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def decompile(addr):
     return _ida.decompile(addr)
 
 
 @withHexrays
 @takes_address
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def decompile_context(pc, context_lines):
     return _ida.decompile_context(pc, context_lines)
 
 
 @withIDA
-@pwndbg.lib.memoize.forever
+@pwndbg.lib.cache.cache_until("forever")
 def get_ida_versions():
     return _ida.versions()
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetStrucQty():
     return _ida.get_struc_qty()
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetStrucId(idx):
     return _ida.get_struc_by_idx(idx)
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetStrucName(sid):
     return _ida.get_struc_name(sid)
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetStrucSize(sid):
     return _ida.get_struc_size(sid)
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetMemberQty(sid):
     return _ida.get_member_qty(sid)
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetMemberSize(sid, offset):
     return _ida.get_member_size(sid, offset)
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetMemberId(sid, offset):
     return _ida.get_member_id(sid, offset)
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetMemberName(sid, offset):
     return _ida.get_member_name(sid, offset)
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetMemberFlag(sid, offset):
     return _ida.get_member_flag(sid, offset)
 
 
 @withIDA
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def GetStrucNextOff(sid, offset):
     return _ida.get_next_offset(sid, offset)
 

@@ -3,6 +3,8 @@ Reading, writing, and describing memory.
 """
 
 
+from typing import Optional
+
 import gdb
 
 import pwndbg.gdblib.arch
@@ -114,8 +116,8 @@ def peek(address):
     return None
 
 
-@pwndbg.lib.memoize.reset_on_stop
-def is_readable_address(address):
+@pwndbg.lib.cache.cache_until("stop")
+def is_readable_address(address) -> bool:
     """is_readable_address(address) -> bool
 
     Check if the address can be read by GDB.
@@ -244,7 +246,7 @@ def u64(addr: int) -> int:
     return readtype(pwndbg.gdblib.typeinfo.uint64, addr)
 
 
-def u(addr, size=None):
+def u(addr, size: Optional[int] = None):
     """u(addr, size=None) -> int
 
     Read one ``unsigned`` integer from the specified address,
@@ -297,7 +299,7 @@ def poi(type, addr):
     return gdb.Value(addr).cast(type.pointer()).dereference()
 
 
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def find_upper_boundary(addr: int, max_pages: int = 1024) -> int:
     """find_upper_boundary(addr, max_pages=1024) -> int
 
@@ -323,7 +325,7 @@ def find_upper_boundary(addr: int, max_pages: int = 1024) -> int:
     return addr
 
 
-@pwndbg.lib.memoize.reset_on_stop
+@pwndbg.lib.cache.cache_until("stop")
 def find_lower_boundary(addr, max_pages=1024):
     """find_lower_boundary(addr, max_pages=1024) -> int
 

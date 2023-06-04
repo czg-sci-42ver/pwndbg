@@ -4,8 +4,6 @@ from collections import namedtuple
 from typing import Any
 from typing import List
 
-import pwndbg.lib.memoize
-
 from . import theme
 
 NORMAL = "\x1b[0m"
@@ -133,9 +131,8 @@ disable_colors = theme.add_param(
 )
 
 
-@pwndbg.lib.memoize.reset_on_stop
 def generateColorFunctionInner(old, new):
-    def wrapper(text):
+    def wrapper(text: str):
         return new(old(text))
 
     return wrapper

@@ -201,20 +201,20 @@ def test_context_backtrace_show_proper_symbol_names(start_binary):
         == "─────────────────────────────────[ BACKTRACE ]──────────────────────────────────"
     )
 
-    assert re.match(r" ► f 0   0x[0-9a-f]+ A::foo\(int, int\)", backtrace[2])
+    assert re.match(r".*0   0x[0-9a-f]+ A::foo\(int, int\)", backtrace[2])
 
     # Match A::call_foo()+38 or similar: the offset may change so we match \d+ at the end
-    assert re.match(r"   f 1   0x[0-9a-f]+ A::call_foo\(\)\+\d+", backtrace[3])
+    assert re.match(r".*1   0x[0-9a-f]+ A::call_foo\(\)\+\d+", backtrace[3])
 
     # Match main+87 or similar offset
-    assert re.match(r"   f 2   0x[0-9a-f]+ main\+\d+", backtrace[4])
+    assert re.match(r".*2   0x[0-9a-f]+ main\+\d+", backtrace[4])
 
     # Match __libc_start_main+243 or similar offset
     # Note: on Ubuntu 22.04 there will be __libc_start_call_main and then __libc_start_main
     # but on older distros there will be only __libc_start_main
     # Let's not bother too much about it and make it the last call assertion here
     assert re.match(
-        r"   f 3   0x[0-9a-f]+ (__libc_start_main|__libc_start_call_main)\+\d+", backtrace[5]
+        r".*3   0x[0-9a-f]+ (__libc_start_main|__libc_start_call_main)\+\d+", backtrace[5]
     )
 
     assert (
@@ -222,3 +222,35 @@ def test_context_backtrace_show_proper_symbol_names(start_binary):
         == "────────────────────────────────────────────────────────────────────────────────"
     )
     assert backtrace[-1] == ""
+
+
+def test_context_disasm_works_properly_with_disasm_flavor_switch(start_binary):
+    start_binary(SYSCALLS_BINARY)
+
+    def assert_intel(out):
+        assert "mov    eax, 0" in out[2]
+        assert "mov    edi, 0x1337" in out[3]
+        assert "mov    esi, 0xdeadbeef" in out[4]
+        assert "mov    ecx, 0x10" in out[5]
+        assert "syscall" in out[6]
+
+    def assert_att(out):
+        assert "mov    movl   $0, %eax" not in out[2]
+        assert "mov    movl   $0x1337, %edi" not in out[3]
+        assert "mov    movl   $0xdeadbeef, %esi" not in out[4]
+        assert "mov    movl   $0x10, %ecx" not in out[5]
+        assert "syscall" in out[6]
+
+    out = gdb.execute("context disasm", to_string=True).split("\n")
+    assert out[0] == "LEGEND: STACK | HEAP | CODE | DATA | RWX | RODATA"
+    assert (
+        out[1] == "──────────────────────[ DISASM / x86-64 / set emulate on ]──────────────────────"
+    )
+    assert_intel(out)
+
+    gdb.execute("set disassembly-flavor att")
+    assert out[0] == "LEGEND: STACK | HEAP | CODE | DATA | RWX | RODATA"
+    assert (
+        out[1] == "──────────────────────[ DISASM / x86-64 / set emulate on ]──────────────────────"
+    )
+    assert_att(out)

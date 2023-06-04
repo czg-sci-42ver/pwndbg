@@ -1,7 +1,13 @@
 import copy
 import importlib
 from collections import OrderedDict
-from enum import Enum
+
+try:
+    # Python 3.11, see https://docs.python.org/3/whatsnew/3.11.html#enum
+    from enum import ReprEnum as Enum
+except ImportError:
+    from enum import Enum
+
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -79,7 +85,7 @@ class Bin:
 class Bins:
     def __init__(self, bin_type) -> None:
         # `typing.OrderedDict` requires Python 3.7
-        self.bins = OrderedDict()  # type: OrderedDict[Union[int, str], Bin]
+        self.bins: OrderedDict[Union[int, str], Bin] = OrderedDict()
         self.bin_type = bin_type
 
     # TODO: There's a bunch of bin-specific logic in here, maybe we should
@@ -889,7 +895,7 @@ class GlibcMemoryAllocator(pwndbg.heap.heap.MemoryAllocator):
         raise NotImplementedError()
 
     @property
-    @pwndbg.lib.memoize.reset_on_stop
+    @pwndbg.lib.cache.cache_until("stop")
     def arenas(self):
         """Return a tuple of all current arenas."""
         arenas = []
@@ -927,42 +933,35 @@ class GlibcMemoryAllocator(pwndbg.heap.heap.MemoryAllocator):
         raise NotImplementedError()
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
     def heap_info(self):
         raise NotImplementedError()
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
     def malloc_chunk(self):
         raise NotImplementedError()
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
     def malloc_state(self):
         raise NotImplementedError()
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
     def tcache_perthread_struct(self):
         raise NotImplementedError()
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
     def tcache_entry(self):
         raise NotImplementedError()
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
     def mallinfo(self):
         raise NotImplementedError()
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
     def malloc_par(self):
         raise NotImplementedError()
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def malloc_alignment(self):
         """Corresponds to MALLOC_ALIGNMENT in glibc malloc.c"""
         if pwndbg.gdblib.arch.current == "i386" and pwndbg.glibc.get_version() >= (2, 26):
@@ -983,32 +982,31 @@ class GlibcMemoryAllocator(pwndbg.heap.heap.MemoryAllocator):
         )
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def size_sz(self):
         """Corresponds to SIZE_SZ in glibc malloc.c"""
         return pwndbg.gdblib.arch.ptrsize
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def malloc_align_mask(self):
         """Corresponds to MALLOC_ALIGN_MASK in glibc malloc.c"""
         return self.malloc_alignment - 1
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def minsize(self):
         """Corresponds to MINSIZE in glibc malloc.c"""
         return self.min_chunk_size
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def min_chunk_size(self):
         """Corresponds to MIN_CHUNK_SIZE in glibc malloc.c"""
         return pwndbg.gdblib.arch.ptrsize * 4
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
-    @pwndbg.lib.memoize.reset_on_thread
+    @pwndbg.lib.cache.cache_until("objfile", "thread")
     def multithreaded(self):
         """Is malloc operating within a multithreaded environment."""
         addr = pwndbg.gdblib.symbol.address("__libc_multiple_threads")
@@ -1022,7 +1020,7 @@ class GlibcMemoryAllocator(pwndbg.heap.heap.MemoryAllocator):
             return self.minsize
         return (req + self.size_sz + self.malloc_align_mask) & ~self.malloc_align_mask
 
-    def chunk_flags(self, size):
+    def chunk_flags(self, size: int):
         return (
             size & ptmalloc.PREV_INUSE,
             size & ptmalloc.IS_MMAPPED,
@@ -1051,7 +1049,7 @@ class GlibcMemoryAllocator(pwndbg.heap.heap.MemoryAllocator):
             return None
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def tcache_next_offset(self):
         return self.tcache_entry.keys().index("next") * pwndbg.gdblib.arch.ptrsize
 
@@ -1082,7 +1080,7 @@ class GlibcMemoryAllocator(pwndbg.heap.heap.MemoryAllocator):
         else:
             return None
 
-    def fastbin_index(self, size):
+    def fastbin_index(self, size: int):
         if pwndbg.gdblib.arch.ptrsize == 8:
             return (size >> 4) - 2
         else:
@@ -1130,7 +1128,7 @@ class GlibcMemoryAllocator(pwndbg.heap.heap.MemoryAllocator):
         num_tcachebins = entries.type.sizeof // entries.type.target().sizeof
         safe_lnk = pwndbg.glibc.check_safe_linking()
 
-        def tidx2usize(idx):
+        def tidx2usize(idx: int):
             """Tcache bin index to chunk size, following tidx2usize macro in glibc malloc.c"""
             return idx * self.malloc_alignment + self.minsize - self.size_sz
 
@@ -1410,37 +1408,37 @@ class DebugSymsHeap(GlibcMemoryAllocator):
         return self._global_max_fast
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def heap_info(self):
         return pwndbg.gdblib.typeinfo.load("heap_info")
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def malloc_chunk(self):
         return pwndbg.gdblib.typeinfo.load("struct malloc_chunk")
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def malloc_state(self):
         return pwndbg.gdblib.typeinfo.load("struct malloc_state")
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def tcache_perthread_struct(self):
         return pwndbg.gdblib.typeinfo.load("struct tcache_perthread_struct")
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def tcache_entry(self):
         return pwndbg.gdblib.typeinfo.load("struct tcache_entry")
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def mallinfo(self):
         return pwndbg.gdblib.typeinfo.load("struct mallinfo")
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def malloc_par(self):
         return pwndbg.gdblib.typeinfo.load("struct malloc_par")
 
@@ -1757,11 +1755,7 @@ class HeuristicHeap(GlibcMemoryAllocator):
                     value, address = found
                     print(
                         message.notice(
-                            "Found matching arena address %s at %s\n"
-                            % (
-                                message.hint(hex(value)),
-                                message.hint(hex(address)),
-                            )
+                            f"Found matching arena address {message.hint(hex(value))} at {message.hint(hex(address))}\n"
                         )
                     )
                     arena = Arena(value)
@@ -1770,8 +1764,7 @@ class HeuristicHeap(GlibcMemoryAllocator):
 
                 print(
                     message.notice(
-                        "Cannot find %s, the arena might be not allocated yet.\n"
-                        % message.hint("thread_arena")
+                        f"Cannot find {message.hint('thread_arena')}, the arena might be not allocated yet.\n"
                     )
                 )
                 return None
@@ -1839,11 +1832,7 @@ class HeuristicHeap(GlibcMemoryAllocator):
                         value, address = found
                         print(
                             message.notice(
-                                "Found possible tcache at %s with value: %s\n"
-                                % (
-                                    message.hint(hex(address)),
-                                    message.hint(hex(value)),
-                                )
+                                f"Found possible tcache at {message.hint(hex(address))} with value: {message.hint(hex(value))}\n"
                             )
                         )
                         self._thread_cache = self.tcache_perthread_struct(value)
@@ -1924,38 +1913,38 @@ class HeuristicHeap(GlibcMemoryAllocator):
         return default
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def heap_info(self):
         return self.struct_module.HeapInfo
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def malloc_chunk(self):
         return self.struct_module.MallocChunk
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def malloc_state(self):
         return self.struct_module.MallocState
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def tcache_perthread_struct(self):
         return self.struct_module.TcachePerthreadStruct
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def tcache_entry(self):
         return self.struct_module.TcacheEntry
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def mallinfo(self):
         # TODO/FIXME: Currently, we don't need to create a new class for `struct mallinfo` because we never use it.
         raise NotImplementedError("`struct mallinfo` is not implemented yet.")
 
     @property
-    @pwndbg.lib.memoize.reset_on_objfile
+    @pwndbg.lib.cache.cache_until("objfile")
     def malloc_par(self):
         return self.struct_module.MallocPar
 

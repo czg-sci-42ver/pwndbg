@@ -6,6 +6,7 @@ Uses IDA when available if there isn't sufficient symbol
 information available.
 """
 import re
+from typing import Optional
 
 import gdb
 
@@ -21,7 +22,7 @@ import pwndbg.gdblib.remote
 import pwndbg.gdblib.stack
 import pwndbg.gdblib.vmmap
 import pwndbg.ida
-import pwndbg.lib.memoize
+import pwndbg.lib.cache
 
 
 def _get_debug_file_directory():
@@ -43,13 +44,13 @@ def _get_debug_file_directory():
 
 
 def _set_debug_file_directory(d) -> None:
-    gdb.execute("set debug-file-directory %s" % d, to_string=True, from_tty=False)
+    gdb.execute(f"set debug-file-directory {d}", to_string=True, from_tty=False)
 
 
 def _add_debug_file_directory(d) -> None:
     current = _get_debug_file_directory()
     if current:
-        _set_debug_file_directory("%s:%s" % (current, d))
+        _set_debug_file_directory(f"{current}:{d}")
     else:
         _set_debug_file_directory(d)
 
@@ -58,7 +59,7 @@ if "/usr/lib/debug" not in _get_debug_file_directory():
     _add_debug_file_directory("/usr/lib/debug")
 
 
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def get(address: int, gdb_only=False) -> str:
     """
     Retrieve the name for the symbol located at `address` - either from GDB or from IDA sync
@@ -109,7 +110,7 @@ def get(address: int, gdb_only=False) -> str:
     return loc_string.replace(" + ", "+")
 
 
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def address(symbol: str) -> int:
     """
     Get the address for `symbol`
@@ -162,8 +163,7 @@ def address(symbol: str) -> int:
     return None
 
 
-@pwndbg.lib.memoize.reset_on_objfile
-@pwndbg.lib.memoize.reset_on_thread
+@pwndbg.lib.cache.cache_until("objfile", "thread")
 def static_linkage_symbol_address(symbol: str) -> int:
     """
     Get the address for static linkage `symbol`
@@ -183,8 +183,7 @@ def static_linkage_symbol_address(symbol: str) -> int:
         return None
 
 
-@pwndbg.lib.memoize.reset_on_stop
-@pwndbg.lib.memoize.reset_on_start
+@pwndbg.lib.cache.cache_until("stop", "start")
 def selected_frame_source_absolute_filename():
     """
     Retrieve the symbol table’s source absolute file name from the selected frame.
@@ -208,3 +207,11 @@ def selected_frame_source_absolute_filename():
         return None
 
     return symtab.fullname()
+
+
+def parse_and_eval(expression: str) -> Optional[gdb.Value]:
+    """Error handling wrapper for GDBs parse_and_eval function"""
+    try:
+        return gdb.parse_and_eval(expression)
+    except gdb.error:
+        return None

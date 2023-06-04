@@ -97,8 +97,7 @@ class AUXV(dict):
         return str({k: v for k, v in self.items() if v is not None})
 
 
-@pwndbg.lib.memoize.reset_on_objfile
-@pwndbg.lib.memoize.reset_on_start
+@pwndbg.lib.cache.cache_until("objfile", "start")
 def get():
     return use_info_auxv() or walk_stack() or AUXV()
 
@@ -113,7 +112,7 @@ def use_info_auxv():
     for line in lines:
         match = re.match("([0-9]+) .*? (0x[0-9a-f]+|[0-9]+$)", line)
         if not match:
-            print("Warning: Skipping auxv entry '{}'".format(line))
+            print(f"Warning: Skipping auxv entry '{line}'")
             continue
 
         const, value = int(match.group(1)), int(match.group(2), 0)

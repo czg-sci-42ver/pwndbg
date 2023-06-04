@@ -27,8 +27,8 @@ import pwndbg.gdblib.events
 import pwndbg.gdblib.info
 import pwndbg.gdblib.memory
 import pwndbg.gdblib.proc
+import pwndbg.lib.cache
 import pwndbg.lib.elftypes
-import pwndbg.lib.memoize
 
 # ELF constants
 PF_X, PF_W, PF_R = 1, 2, 4
@@ -84,7 +84,7 @@ def read(typ, address, blob=None):
     return obj
 
 
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def get_elf_info(filepath):
     """
     Parse and return ELFInfo.
@@ -118,7 +118,7 @@ def get_elf_info(filepath):
         return ELFInfo(header, sections, segments)
 
 
-@pwndbg.lib.memoize.reset_on_objfile
+@pwndbg.lib.cache.cache_until("objfile")
 def get_elf_info_rebased(filepath, vaddr):
     """
     Parse and return ELFInfo with all virtual addresses rebased to vaddr
@@ -208,7 +208,7 @@ def dump_relocations_by_section_name(
 
 
 @pwndbg.gdblib.proc.OnlyWhenRunning
-@pwndbg.lib.memoize.reset_on_start
+@pwndbg.lib.cache.cache_until("start")
 def exe():
     """
     Return a loaded ELF header object pointing to the Ehdr of the
@@ -220,7 +220,7 @@ def exe():
 
 
 @pwndbg.gdblib.proc.OnlyWhenRunning
-@pwndbg.lib.memoize.reset_on_start
+@pwndbg.lib.cache.cache_until("start")
 def entry() -> int:
     """
     Return the address of the entry point for the main executable.
@@ -260,7 +260,7 @@ def load(pointer):
 ehdr_type_loaded = 0
 
 
-@pwndbg.lib.memoize.reset_on_start
+@pwndbg.lib.cache.cache_until("start")
 def reset_ehdr_type_loaded() -> None:
     global ehdr_type_loaded
     ehdr_type_loaded = 0
@@ -273,32 +273,38 @@ def get_ehdr(pointer):
     We expect the `pointer` to be an address from the binary.
     """
 
-    # This just does not work :(
-    if pwndbg.gdblib.qemu.is_qemu():
-        return None, None
-
-    vmmap = pwndbg.gdblib.vmmap.find(pointer)
     base = None
 
-    # If there is no vmmap for the requested address, we can't do much
-    # (e.g. it could have been unmapped for whatever reason)
-    if vmmap is None:
-        return None, None
-
-    # We first check if the beginning of the page contains the ELF magic
-    if pwndbg.gdblib.memory.read(vmmap.start, 4, partial=True) == b"\x7fELF":
-        base = vmmap.start
-
-    # The page did not have ELF magic; it may be that .text and binary start are split
-    # into two pages, so let's get the first page from the pointer's page objfile
+    if pwndbg.gdblib.qemu.is_qemu():
+        # Only check if the beginning of the page contains the ELF magic,
+        # since we cannot get the memory map in qemu-user.
+        page_start = pwndbg.lib.memory.page_align(pointer)
+        if pwndbg.gdblib.memory.read(page_start, 4, partial=True) == b"\x7fELF":
+            base = page_start
+        else:
+            return None, None
     else:
-        for v in pwndbg.gdblib.vmmap.get():
-            if v.objfile == vmmap.objfile:
-                vmmap = v
-                break
+        vmmap = pwndbg.gdblib.vmmap.find(pointer)
 
+        # If there is no vmmap for the requested address, we can't do much
+        # (e.g. it could have been unmapped for whatever reason)
+        if vmmap is None:
+            return None, None
+
+        # We first check if the beginning of the page contains the ELF magic
         if pwndbg.gdblib.memory.read(vmmap.start, 4, partial=True) == b"\x7fELF":
             base = vmmap.start
+
+        # The page did not have ELF magic; it may be that .text and binary start are split
+        # into two pages, so let's get the first page from the pointer's page objfile
+        else:
+            for v in pwndbg.gdblib.vmmap.get():
+                if v.objfile == vmmap.objfile:
+                    vmmap = v
+                    break
+
+            if pwndbg.gdblib.memory.read(vmmap.start, 4, partial=True) == b"\x7fELF":
+                base = vmmap.start
 
     if base is None:
         # For non linux ABI, the ELF header may not exist at all

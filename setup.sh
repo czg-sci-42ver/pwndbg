@@ -25,7 +25,7 @@ install_apt() {
     if uname -m | grep x86_64 > /dev/null; then
         sudo dpkg --add-architecture i386 || true
         sudo apt-get update || true
-        sudo apt-get install -y libc6-dbg:i386 || true
+        sudo apt-get install -y libc6-dbg:i386 libgcc-s1:i386 || true
     fi
 }
 
@@ -131,10 +131,10 @@ if linux; then
         "clear-linux-os")
             install_swupd
             ;;
-        "opensuse-leap")
+        "opensuse-leap" | "opensuse-tumbleweed")
             install_zypper
             ;;
-        "arch" | "endeavouros" | "manjaro")
+        "arch" | "archarm" | "endeavouros" | "manjaro" | "garuda")
             install_pacman
             echo "Logging off and in or conducting a power cycle is required to get debuginfod to work."
             echo "Alternatively you can manually set the environment variable: DEBUGINFOD_URLS=https://debuginfod.archlinux.org"
@@ -157,7 +157,7 @@ if linux; then
             elif hash dnf; then
                 install_dnf
             else
-                echo "\"$distro\" is not supported and your distro don't have apt or dnf that we support currently."
+                echo "\"$distro\" is not supported and your distro don't have a package manager that we support currently."
                 exit
             fi
             ;;
