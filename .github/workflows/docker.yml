@@ -1,12 +1,13 @@
 name: Docker build
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   docker:
     strategy:
       fail-fast: false
       matrix:
-        images: [ubuntu18.04, ubuntu20.04, ubuntu22.04, debian10, debian11, archlinux]
+        # archlinux is removed for now until we use virtualenv for deps install
+        images: [ubuntu18.04, ubuntu20.04, ubuntu22.04, debian10, debian11]
 
     runs-on: ubuntu-latest
     timeout-minutes: 30

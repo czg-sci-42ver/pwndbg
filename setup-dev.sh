@@ -95,7 +95,10 @@ install_apt() {
         parallel \
         netcat-openbsd \
         qemu-system-x86 \
-        qemu-system-arm
+        qemu-system-arm \
+        qemu-user \
+        gcc-aarch64-linux-gnu \
+        gcc-riscv64-linux-gnu
 
     if [[ "$1" == "22.04" ]]; then
         sudo apt install shfmt
@@ -170,5 +173,10 @@ if linux; then
             ;;
     esac
 
-    python3 -m pip install -r dev-requirements.txt
+    if [[ -z "${PWNDBG_VENV_PATH}" ]]; then
+        PWNDBG_VENV_PATH="./.venv"
+    fi
+    echo "Using virtualenv from path: ${PWNDBG_VENV_PATH}"
+    PYTHON=${PWNDBG_VENV_PATH}/bin/python
+    ${PYTHON} -m pip install -r dev-requirements.txt
 fi
